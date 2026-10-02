@@ -27,3 +27,31 @@ export interface CheckAccountResponse {
   phoneNumber?: number;
   fromCache?: boolean;
 }
+
+export interface IncomingTextMessageBody {
+  typeWebhook: 'incomingMessageReceived';
+  idMessage: string;
+  timestamp: number;
+  senderData: {
+    chatId: string;
+    senderName: string;
+    senderPhoneNumber: number;
+  };
+  messageData: {
+    typeMessage: 'textMessage';
+    textMessageData: {
+      textMessage: string;
+    };
+  };
+}
+export interface ReceivedNotificationResponse {
+  receiptId: number;
+  body: IncomingTextMessageBody;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  direction: 'incoming' | 'outgoing';
+  timestamp: number;
+}

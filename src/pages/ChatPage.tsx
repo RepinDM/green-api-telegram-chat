@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+
 import { sendMessage } from '../api/greenApi';
-import type { GreenApiCredentials } from '../types/greenApi';
+import { useNotifications } from '../hooks/useNotifications';
+
+import type {
+  ChatMessage,
+  GreenApiCredentials,
+} from '../types/greenApi';
 
 interface ChatPageProps {
   credentials: GreenApiCredentials;
@@ -12,9 +18,32 @@ export function ChatPage({
                            chatId,
                          }: ChatPageProps) {
   const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
-  const [sentMessages, setSentMessages] = useState<string[]>([]);
+
+  const handleIncomingMessage = useCallback(
+    (incomingMessage: {
+      id: string;
+      text: string;
+      timestamp: number;
+    }) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          ...incomingMessage,
+          direction: 'incoming',
+        },
+      ]);
+    },
+    [],
+  );
+
+  useNotifications({
+    credentials,
+    chatId,
+    onMessage: handleIncomingMessage,
+  });
 
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>,
@@ -31,15 +60,20 @@ export function ChatPage({
       setIsSending(true);
       setError('');
 
-      await sendMessage(
+      const response = await sendMessage(
         credentials,
         chatId,
         trimmedMessage,
       );
 
-      setSentMessages((prev) => [
+      setMessages((prev) => [
         ...prev,
-        trimmedMessage,
+        {
+          id: response.idMessage,
+          text: trimmedMessage,
+          direction: 'outgoing',
+          timestamp: Math.floor(Date.now() / 1000),
+        },
       ]);
 
       setMessage('');
@@ -58,10 +92,16 @@ export function ChatPage({
       <p>chatId: {chatId}</p>
 
       <section>
-        {sentMessages.map((text, index) => (
-          <p key={`${text}-${index}`}>
-            {text}
-          </p>
+        {messages.map((message) => (
+          <div key={message.id}>
+            <strong>
+              {message.direction === 'outgoing'
+                ? 'Вы'
+                : 'Собеседник'}
+            </strong>
+
+            <p>{message.text}</p>
+          </div>
         ))}
       </section>
 

@@ -4,12 +4,21 @@ import {
   useRef,
   useState,
 } from 'react';
-import { sendMessage } from '../api/greenApi';
+import {
+  GreenApiRequestError,
+  sendMessage,
+} from '../api/greenApi';
 import { useNotifications } from '../hooks/useNotifications';
 import { formatTime } from '../utils/formatTime';
+import {
+  limitMessageHistory,
+  readStoredMessages,
+  writeStoredMessages,
+} from '../utils/messageStorage';
 import type {
   ChatMessage,
   GreenApiCredentials,
+  PollingError,
   Recipient,
 } from '../types/greenApi';
 
@@ -17,20 +26,58 @@ interface ChatPageProps {
   credentials: GreenApiCredentials;
   recipient: Recipient;
   onBack: () => void;
+  onLogout: () => void;
+}
+
+const MESSAGE_TEXT_LIMIT = 4096;
+
+function getSendMessageErrorText(error: unknown): string {
+  if (error instanceof GreenApiRequestError) {
+    if (
+      error.status === 466 ||
+      error.responseText.includes('QUOTE_ALLOWED') ||
+      error.responseText.includes(
+        'CORRESPONDENTS_QUOTE_EXCEEDED',
+      )
+    ) {
+      return (
+        'Сообщение не отправлено: GREEN-API вернул лимит ' +
+        'тарифа или квоты корреспондентов.'
+      );
+    }
+  }
+
+  return 'Не удалось отправить сообщение';
 }
 
 export function ChatPage({
-      credentials,
-      recipient,
-      onBack,}: ChatPageProps) {
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState('');
-
+  credentials,
+  recipient,
+  onBack,
+  onLogout,
+}: ChatPageProps) {
   const { chatId } = recipient;
 
+  const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    readStoredMessages(credentials.idInstance, chatId),
+  );
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState('');
+  const [pollingError, setPollingError] =
+    useState<PollingError | null>(null);
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  const addMessage = useCallback((newMessage: ChatMessage) => {
+    setMessages((prev) => {
+      if (prev.some((item) => item.id === newMessage.id)) {
+        return prev;
+      }
+
+      return limitMessageHistory([...prev, newMessage]);
+    });
+  }, []);
 
   const handleIncomingMessage = useCallback(
     (incomingMessage: {
@@ -38,21 +85,28 @@ export function ChatPage({
       text: string;
       timestamp: number;
     }) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          ...incomingMessage,
-          direction: 'incoming',
-        },
-      ]);
+      addMessage({
+        ...incomingMessage,
+        direction: 'incoming',
+      });
     },
-    [],
+    [addMessage],
   );
+
+  const handlePollingError = useCallback((nextError: PollingError) => {
+    setPollingError(nextError);
+  }, []);
+
+  const handlePollingRecovered = useCallback(() => {
+    setPollingError(null);
+  }, []);
 
   useNotifications({
     credentials,
     chatId,
     onMessage: handleIncomingMessage,
+    onError: handlePollingError,
+    onRecovered: handlePollingRecovered,
   });
 
   useEffect(() => {
@@ -60,6 +114,14 @@ export function ChatPage({
       behavior: 'smooth',
     });
   }, [messages]);
+
+  useEffect(() => {
+    writeStoredMessages(
+      credentials.idInstance,
+      chatId,
+      messages,
+    );
+  }, [chatId, credentials.idInstance, messages]);
 
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>,
@@ -69,6 +131,13 @@ export function ChatPage({
     const trimmedMessage = message.trim();
 
     if (!trimmedMessage) {
+      return;
+    }
+
+    if (trimmedMessage.length > MESSAGE_TEXT_LIMIT) {
+      setError(
+        `Сообщение длиннее ${MESSAGE_TEXT_LIMIT} символов. Сократите текст.`,
+      );
       return;
     }
 
@@ -82,21 +151,18 @@ export function ChatPage({
         trimmedMessage,
       );
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: response.idMessage,
-          text: trimmedMessage,
-          direction: 'outgoing',
-          timestamp: Math.floor(Date.now() / 1000),
-        },
-      ]);
+      addMessage({
+        id: response.idMessage,
+        text: trimmedMessage,
+        direction: 'outgoing',
+        timestamp: Math.floor(Date.now() / 1000),
+      });
 
       setMessage('');
     } catch (error) {
       console.error(error);
 
-      setError('Не удалось отправить сообщение');
+      setError(getSendMessageErrorText(error));
     } finally {
       setIsSending(false);
     }
@@ -134,7 +200,7 @@ export function ChatPage({
                 {avatarLetter}
               </div>
 
-              <div>
+              <div className="chat-user__meta">
                 <h1 className="chat-user__name">
                   {displayName}
                 </h1>
@@ -144,6 +210,16 @@ export function ChatPage({
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="chat__actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={onLogout}
+            >
+              Сменить подключение
+            </button>
           </div>
         </header>
 
@@ -198,6 +274,7 @@ export function ChatPage({
               }
               placeholder="Написать сообщение..."
               disabled={isSending}
+              maxLength={MESSAGE_TEXT_LIMIT}
             />
 
             <button
@@ -216,6 +293,12 @@ export function ChatPage({
           {error && (
             <p className="chat__error">
               {error}
+            </p>
+          )}
+
+          {pollingError && (
+            <p className="chat__error">
+              {pollingError.message}
             </p>
           )}
         </footer>

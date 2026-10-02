@@ -1,14 +1,50 @@
 import { useState } from 'react';
-import { checkCredentials } from '../api/greenApi';
+import {
+  checkCredentials,
+  GreenApiInstanceStateError,
+} from '../api/greenApi';
 import type { GreenApiCredentials } from '../types/greenApi';
 
 interface CredentialsPageProps {
   onSubmit: (credentials: GreenApiCredentials) => void;
 }
 
+function normalizeApiUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    return url.href.replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function getInstanceStateErrorText(
+  error: GreenApiInstanceStateError,
+): string {
+  switch (error.stateInstance) {
+    case 'notAuthorized':
+      return 'Instance не авторизован. Авторизуйте Telegram аккаунт в GREEN-API.';
+    case 'starting':
+      return 'Instance запускается. Повторите подключение через несколько секунд.';
+    case 'blocked':
+      return 'Instance заблокирован в GREEN-API.';
+    case 'suspended':
+      return 'Instance приостановлен в GREEN-API.';
+    case 'pendingPassword':
+      return 'Для instance требуется пароль или дополнительная авторизация.';
+    default:
+      return 'Instance не готов к работе.';
+  }
+}
+
 export function CredentialsPage({
-                                  onSubmit,
-                                }: CredentialsPageProps) {
+  onSubmit,
+}: CredentialsPageProps) {
   const [idInstance, setIdInstance] = useState('');
   const [apiTokenInstance, setApiTokenInstance] = useState('');
   const [apiUrl, setApiUrl] = useState('');
@@ -21,19 +57,29 @@ export function CredentialsPage({
   ) {
     event.preventDefault();
 
-    if (
-      !idInstance.trim() ||
-      !apiTokenInstance.trim() ||
-      !apiUrl.trim()
-    ) {
+    const trimmedIdInstance = idInstance.trim();
+    const trimmedToken = apiTokenInstance.trim();
+    const normalizedApiUrl = normalizeApiUrl(apiUrl.trim());
+
+    if (!trimmedIdInstance || !trimmedToken || !apiUrl.trim()) {
       setError('Заполни все поля');
       return;
     }
 
+    if (!/^\d+$/.test(trimmedIdInstance)) {
+      setError('idInstance должен содержать только цифры');
+      return;
+    }
+
+    if (!normalizedApiUrl) {
+      setError('apiUrl должен быть корректным http или https URL');
+      return;
+    }
+
     const credentials: GreenApiCredentials = {
-      idInstance: idInstance.trim(),
-      apiTokenInstance: apiTokenInstance.trim(),
-      apiUrl: apiUrl.trim(),
+      idInstance: trimmedIdInstance,
+      apiTokenInstance: trimmedToken,
+      apiUrl: normalizedApiUrl,
     };
 
     try {
@@ -46,9 +92,13 @@ export function CredentialsPage({
     } catch (error) {
       console.error(error);
 
-      setError(
-        'Не удалось подключиться к GREEN-API. Проверь данные.',
-      );
+      if (error instanceof GreenApiInstanceStateError) {
+        setError(getInstanceStateErrorText(error));
+      } else {
+        setError(
+          'Не удалось подключиться к GREEN-API. Проверь данные.',
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -75,56 +125,62 @@ export function CredentialsPage({
         <form
           className="form"
           onSubmit={handleSubmit}
+          autoComplete="off"
         >
           <label className="form-field">
-          <span className="form-field__label">
-            idInstance
-          </span>
+            <span className="form-field__label">
+              idInstance
+            </span>
 
             <input
               className="form-field__input"
               type="text"
+              name="green-api-id-instance"
               value={idInstance}
               onChange={(event) =>
                 setIdInstance(event.target.value)
               }
-              placeholder="Например: 410022753281"
+              placeholder="YOUR_ID_INSTANCE"
               disabled={isLoading}
+              autoComplete="off"
             />
           </label>
 
           <label className="form-field">
-          <span className="form-field__label">
-            apiTokenInstance
-          </span>
+            <span className="form-field__label">
+              apiTokenInstance
+            </span>
 
             <input
               className="form-field__input"
               type="password"
+              name="green-api-token-instance"
               value={apiTokenInstance}
               onChange={(event) =>
                 setApiTokenInstance(event.target.value)
               }
-              placeholder="Введите API token"
+              placeholder="YOUR_API_TOKEN_INSTANCE"
               disabled={isLoading}
-              autoComplete="current-password"
+              autoComplete="new-password"
             />
           </label>
 
           <label className="form-field">
-          <span className="form-field__label">
-            apiUrl
-          </span>
+            <span className="form-field__label">
+              apiUrl
+            </span>
 
             <input
               className="form-field__input"
               type="text"
+              name="green-api-api-url"
               value={apiUrl}
               onChange={(event) =>
                 setApiUrl(event.target.value)
               }
-              placeholder="https://4100.api.green-api.com"
+              placeholder="https://YOUR_API_HOST"
               disabled={isLoading}
+              autoComplete="off"
             />
           </label>
 

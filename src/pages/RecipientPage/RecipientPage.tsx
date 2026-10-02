@@ -11,12 +11,14 @@ import type {
 interface RecipientPageProps {
   credentials: GreenApiCredentials;
   onSuccess: (recipient: Recipient) => void;
+  onLogout: () => void;
 }
 
 export function RecipientPage({
-                                credentials,
-                                onSuccess,
-                              }: RecipientPageProps) {
+  credentials,
+  onSuccess,
+  onLogout,
+}: RecipientPageProps) {
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -28,8 +30,8 @@ export function RecipientPage({
 
     const normalizedPhone = normalizePhone(phone);
 
-    if (!normalizedPhone) {
-      setError('Введите номер телефона');
+    if (normalizedPhone.length < 8) {
+      setError('Введите корректный номер телефона');
       return;
     }
 
@@ -111,6 +113,16 @@ export function RecipientPage({
               : 'Начать чат'}
           </button>
         </form>
+
+        <div className="auth-card__footer">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onLogout}
+          >
+            Сменить подключение
+          </button>
+        </div>
       </section>
     </main>
   );

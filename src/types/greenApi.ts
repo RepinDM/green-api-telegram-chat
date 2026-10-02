@@ -8,6 +8,11 @@ export interface SendMessageResponse {
   idMessage: string;
 }
 
+export interface DeleteNotificationResponse {
+  result: boolean;
+  reason?: string;
+}
+
 export type InstanceState =
   | 'authorized'
   | 'notAuthorized'
@@ -24,8 +29,29 @@ export interface CheckAccountResponse {
   exist: boolean;
   chatId?: string;
   username?: string;
-  phoneNumber?: number;
+  phoneNumber?: number | string;
   fromCache?: boolean;
+}
+
+export interface GreenApiMessageData {
+  typeMessage?: string;
+  textMessageData?: {
+    textMessage?: string;
+  };
+}
+
+export interface GreenApiSenderData {
+  chatId?: string;
+  senderName?: string;
+  senderPhoneNumber?: number | string;
+}
+
+export interface GreenApiNotificationBody {
+  typeWebhook?: string;
+  idMessage?: string;
+  timestamp?: number;
+  senderData?: GreenApiSenderData;
+  messageData?: GreenApiMessageData;
 }
 
 export interface IncomingTextMessageBody {
@@ -34,8 +60,8 @@ export interface IncomingTextMessageBody {
   timestamp: number;
   senderData: {
     chatId: string;
-    senderName: string;
-    senderPhoneNumber: number;
+    senderName?: string;
+    senderPhoneNumber?: number | string;
   };
   messageData: {
     typeMessage: 'textMessage';
@@ -44,9 +70,10 @@ export interface IncomingTextMessageBody {
     };
   };
 }
-export interface ReceivedNotificationResponse {
+
+export interface ReceiveNotificationResponse {
   receiptId: number;
-  body: IncomingTextMessageBody;
+  body: GreenApiNotificationBody;
 }
 
 export interface ChatMessage {
@@ -60,4 +87,9 @@ export interface Recipient {
   chatId: string;
   phoneNumber: string;
   username?: string;
+}
+
+export interface PollingError {
+  message: string;
+  isPermanent: boolean;
 }

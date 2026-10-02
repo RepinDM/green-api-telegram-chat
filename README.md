@@ -4,6 +4,10 @@ React + TypeScript web-приложение для отправки и полу�
 
 Проект сделан как frontend-only тестовое задание: пользователь вводит данные GREEN-API instance в браузере, выбирает Telegram-получателя по номеру телефона и работает с простым чатом.
 
+## Деплой
+
+https://green-api-telegram-chat-indol.vercel.app/
+
 ## Возможности
 
 - подключение к GREEN-API instance;

@@ -1,17 +1,23 @@
 import { useState } from 'react';
-
-import { CredentialsPage } from './pages/CredentialsPage';
-import { RecipientPage } from './pages/RecipientPage/RecipientPage.tsx';
-
-import type { GreenApiCredentials } from './types/greenApi';
 import { ChatPage } from './pages/ChatPage';
+import { CredentialsPage } from './pages/CredentialsPage';
+import { RecipientPage } from './pages/RecipientPage/RecipientPage';
+import type {
+  GreenApiCredentials,
+  Recipient,
+} from './types/greenApi';
+
 
 function App() {
   const [credentials, setCredentials] =
     useState<GreenApiCredentials | null>(null);
 
-  const [chatId, setChatId] =
-    useState<string | null>(null);
+  const [recipient, setRecipient] =
+    useState<Recipient | null>(null);
+
+  function handleBackToRecipients() {
+    setRecipient(null);
+  }
 
   if (!credentials) {
     return (
@@ -21,27 +27,21 @@ function App() {
     );
   }
 
-  if (!chatId) {
+  if (!recipient) {
     return (
       <RecipientPage
         credentials={credentials}
-        onSuccess={setChatId}
+        onSuccess={setRecipient}
       />
     );
   }
-
   return (
     <ChatPage
       credentials={credentials}
-      chatId={chatId}
+      recipient={recipient}
+      onBack={handleBackToRecipients}
     />
   );
 }
 
 export default App;
-
-// function App() {
-//   return <h1>React работает</h1>;
-// }
-//
-// export default App;

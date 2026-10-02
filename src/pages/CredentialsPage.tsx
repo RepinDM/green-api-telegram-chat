@@ -55,49 +55,96 @@ export function CredentialsPage({
   }
 
   return (
-    <main>
-      <h1>Подключение к GREEN-API</h1>
+    <main className="page-center">
+      <section className="auth-card">
+        <div className="auth-card__header">
+          <div className="auth-card__logo">
+            G
+          </div>
 
-      <form onSubmit={handleSubmit}>
-        <label>
-          idInstance
-          <input
-            type="text"
-            value={idInstance}
-            onChange={(event) => setIdInstance(event.target.value)}
+          <h1 className="auth-card__title">
+            GREEN-API Chat
+          </h1>
+
+          <p className="auth-card__description">
+            Подключите Telegram-инстанс,
+            чтобы начать работу с сообщениями
+          </p>
+        </div>
+
+        <form
+          className="form"
+          onSubmit={handleSubmit}
+        >
+          <label className="form-field">
+          <span className="form-field__label">
+            idInstance
+          </span>
+
+            <input
+              className="form-field__input"
+              type="text"
+              value={idInstance}
+              onChange={(event) =>
+                setIdInstance(event.target.value)
+              }
+              placeholder="Например: 410022753281"
+              disabled={isLoading}
+            />
+          </label>
+
+          <label className="form-field">
+          <span className="form-field__label">
+            apiTokenInstance
+          </span>
+
+            <input
+              className="form-field__input"
+              type="password"
+              value={apiTokenInstance}
+              onChange={(event) =>
+                setApiTokenInstance(event.target.value)
+              }
+              placeholder="Введите API token"
+              disabled={isLoading}
+              autoComplete="current-password"
+            />
+          </label>
+
+          <label className="form-field">
+          <span className="form-field__label">
+            apiUrl
+          </span>
+
+            <input
+              className="form-field__input"
+              type="text"
+              value={apiUrl}
+              onChange={(event) =>
+                setApiUrl(event.target.value)
+              }
+              placeholder="https://4100.api.green-api.com"
+              disabled={isLoading}
+            />
+          </label>
+
+          {error && (
+            <p className="form-error">
+              {error}
+            </p>
+          )}
+
+          <button
+            className="primary-button"
+            type="submit"
             disabled={isLoading}
-          />
-        </label>
-
-        <label>
-          apiTokenInstance
-          <input
-            type="password"
-            value={apiTokenInstance}
-            onChange={(event) =>
-              setApiTokenInstance(event.target.value)
-            }
-            disabled={isLoading}
-          />
-        </label>
-
-        <label>
-          apiUrl
-          <input
-            type="text"
-            value={apiUrl}
-            onChange={(event) => setApiUrl(event.target.value)}
-            placeholder="https://..."
-            disabled={isLoading}
-          />
-        </label>
-
-        {error && <p>{error}</p>}
-
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Проверка...' : 'Продолжить'}
-        </button>
-      </form>
+          >
+            {isLoading
+              ? 'Подключение...'
+              : 'Подключиться'}
+          </button>
+        </form>
+      </section>
     </main>
   );
 }

@@ -55,3 +55,9 @@ export interface ChatMessage {
   direction: 'incoming' | 'outgoing';
   timestamp: number;
 }
+
+export interface Recipient {
+  chatId: string;
+  phoneNumber: string;
+  username?: string;
+}

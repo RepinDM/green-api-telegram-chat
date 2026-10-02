@@ -14,6 +14,10 @@ import type {
   PollingError,
 } from '../types/greenApi';
 
+const POLLING_RETRY_DELAY_MS = 3000;
+const TEMPORARY_ERROR_VISIBLE_AFTER = 3;
+const DELETE_NOTIFICATION_RETRY_LIMIT = 3;
+
 interface UseNotificationsParams {
   credentials: GreenApiCredentials;
   chatId: string;
@@ -47,9 +51,28 @@ function isIncomingTextMessageBody(
   );
 }
 
-function wait(milliseconds: number) {
+function wait(
+  milliseconds: number,
+  signal: AbortSignal,
+): Promise<boolean> {
   return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
+    if (signal.aborted) {
+      resolve(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener('abort', handleAbort);
+      resolve(true);
+    }, milliseconds);
+
+    function handleAbort() {
+      window.clearTimeout(timeoutId);
+      signal.removeEventListener('abort', handleAbort);
+      resolve(false);
+    }
+
+    signal.addEventListener('abort', handleAbort);
   });
 }
 
@@ -100,6 +123,23 @@ function getPollingError(error: unknown): PollingError {
   };
 }
 
+function isDeleteNotificationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith('DeleteNotification')
+  );
+}
+
+function isTemporaryDeleteNotificationError(
+  error: unknown,
+): boolean {
+  return (
+    error instanceof GreenApiRequestError &&
+    error.message.startsWith('DeleteNotification') &&
+    (error.status === 408 || error.status >= 500)
+  );
+}
+
 export function useNotifications({
   credentials,
   chatId,
@@ -111,6 +151,8 @@ export function useNotifications({
     let isActive = true;
     const abortController = new AbortController();
     let consecutiveErrors = 0;
+    let deleteNotificationErrorCount = 0;
+    let failedDeleteReceiptId: number | null = null;
 
     async function pollingLoop() {
       while (isActive) {
@@ -134,6 +176,11 @@ export function useNotifications({
           }
 
           const { receiptId, body } = notification;
+          deleteNotificationErrorCount =
+            failedDeleteReceiptId === receiptId
+              ? deleteNotificationErrorCount
+              : 0;
+          failedDeleteReceiptId = receiptId;
 
           if (
             isIncomingTextMessageBody(body) &&
@@ -162,7 +209,14 @@ export function useNotifications({
           }
 
           await deleteNotification(credentials, receiptId);
+
+          if (!isActive) {
+            return;
+          }
+
           consecutiveErrors = 0;
+          deleteNotificationErrorCount = 0;
+          failedDeleteReceiptId = null;
           onRecovered();
         } catch (error) {
           if (!isActive || isAbortError(error)) {
@@ -174,23 +228,42 @@ export function useNotifications({
           consecutiveErrors += 1;
           const pollingError = getPollingError(error);
 
-          if (
-            error instanceof Error &&
-            error.message.startsWith('DeleteNotification')
-          ) {
+          if (isDeleteNotificationError(error)) {
+            deleteNotificationErrorCount += 1;
+
             onError({
-              isPermanent: true,
+              isPermanent:
+                !isTemporaryDeleteNotificationError(error) ||
+                deleteNotificationErrorCount >=
+                  DELETE_NOTIFICATION_RETRY_LIMIT,
               message:
                 'Не удалось удалить notification из очереди GREEN-API. Получение новых сообщений может быть заблокировано.',
             });
+
+            if (
+              !isTemporaryDeleteNotificationError(error) ||
+              deleteNotificationErrorCount >=
+                DELETE_NOTIFICATION_RETRY_LIMIT
+            ) {
+              return;
+            }
+          } else if (pollingError.isPermanent) {
+            onError(pollingError);
+            return;
           } else if (
-            pollingError.isPermanent ||
-            consecutiveErrors >= 3
+            consecutiveErrors >= TEMPORARY_ERROR_VISIBLE_AFTER
           ) {
             onError(pollingError);
           }
 
-          await wait(3000);
+          const retryAfterDelay = await wait(
+            POLLING_RETRY_DELAY_MS,
+            abortController.signal,
+          );
+
+          if (!retryAfterDelay || !isActive) {
+            return;
+          }
         }
       }
     }
